@@ -47,7 +47,11 @@ endif
 # gcc 3.x emits bogus "old style proto" warning on find.c:alloc_action()
 CFLAGS += $(call cc-ifversion, -ge, 0400, -Wold-style-definition)
 
-ifneq ($(CC),clang)
+ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 1)
+COMPILER := clang
+endif
+
+ifneq ($(COMPILER),clang)
 # "clang-9: warning: optimization flag '-finline-limit=0' is not supported
 CFLAGS += $(call cc-option,-finline-limit=0,)
 endif
@@ -58,13 +62,13 @@ CFLAGS += $(call cc-option,-fno-builtin-strlen -fomit-frame-pointer -ffunction-s
 CFLAGS += $(call cc-option,-fno-guess-branch-probability,)
 CFLAGS += $(call cc-option,-funsigned-char,)
 
-ifneq ($(CC),clang)
+ifneq ($(COMPILER),clang)
 # "clang-9: warning: argument unused during compilation: '-static-libgcc'"
 CFLAGS += $(call cc-option,-static-libgcc,)
 endif
 
 CFLAGS += $(call cc-option,-falign-functions=1,)
-ifneq ($(CC),clang)
+ifneq ($(COMPILER),clang)
 # "clang-9: warning: optimization flag '-falign-jumps=1' is not supported" (and same for other two)
 CFLAGS += $(call cc-option,-falign-jumps=1 -falign-labels=1 -falign-loops=1,)
 endif
@@ -144,15 +148,21 @@ CFLAGS += --sysroot=$(CONFIG_SYSROOT)
 export SYSROOT=$(CONFIG_SYSROOT)
 endif
 
+LDLIBS += m
+
+# Android has no separate rt library
+RT_AVAILABLE := $(shell echo 'int main(void){return 0;}' >rttest.c; $(CC) $(CFLAGS) -lrt -o /dev/null rttest.c >/dev/null 2>&1 && echo "y"; rm rttest.c)
+ifeq ($(RT_AVAILABLE),y)
+LDLIBS += rt
+endif
+
 # Android has no separate crypt library
 # gcc-4.2.1 fails if we try to feed C source on stdin:
 #  echo 'int main(void){return 0;}' | $(CC) $(CFLAGS) -lcrypt -o /dev/null -xc -
 # fall back to using a temp file:
 CRYPT_AVAILABLE := $(shell echo 'int main(void){return 0;}' >crypttest.c; $(CC) $(CFLAGS) -lcrypt -o /dev/null crypttest.c >/dev/null 2>&1 && echo "y"; rm crypttest.c)
 ifeq ($(CRYPT_AVAILABLE),y)
-LDLIBS += m rt crypt
-else
-LDLIBS += m rt
+LDLIBS += crypt
 endif
 # libm may be needed for dc, awk, ntpd
 # librt may be needed for clock_gettime()

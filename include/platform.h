@@ -515,14 +515,15 @@ typedef unsigned smalluint;
 #endif
 
 #if defined(ANDROID) || defined(__ANDROID__)
-# if __ANDROID_API__ < 8
-   /* ANDROID < 8 has no [f]dprintf at all */
-#  undef HAVE_DPRINTF
-# elif __ANDROID_API__ < 21
+# if __ANDROID_API__ >= 21
+   /* ANDROID >= 21 has standard dprintf */
+# elif (__ANDROID_API__ > 8) && defined(CONFIG_STATIC)
    /* ANDROID < 21 has fdprintf */
+   /* but lib.so does not export fdprintf */
 #  define dprintf fdprintf
 # else
-   /* ANDROID >= 21 has standard dprintf */
+   /* ANDROID < 8 has no [f]dprintf at all */
+#  undef HAVE_DPRINTF
 # endif
 # if __ANDROID_API__ < 21
 #  undef HAVE_TTYNAME_R
@@ -530,11 +531,15 @@ typedef unsigned smalluint;
 #  undef HAVE_STPCPY
 # endif
 # undef HAVE_MEMPCPY
+# if __ANDROID_API__ < 24
 # undef HAVE_STRCHRNUL
+# endif
 # undef HAVE_STRVERSCMP
 # undef HAVE_UNLOCKED_LINE_OPS
 # undef HAVE_NET_ETHERNET_H
 # undef HAVE_PRINTF_PERCENTM
+# include <stdio.h>
+# include "android.h"
 #endif
 
 /*
@@ -614,5 +619,9 @@ extern int vasprintf(char **string_ptr, const char *format, va_list p) FAST_FUNC
 # include <sys/types.h> /* size_t */
 extern ssize_t getline(char **lineptr, size_t *n, FILE *stream) FAST_FUNC;
 #endif
+
+#define weak __attribute__((__weak__))
+#define weak_alias(old, new) \
+    extern __typeof(old) new __attribute__((__weak__, __alias__(#old)))
 
 #endif
